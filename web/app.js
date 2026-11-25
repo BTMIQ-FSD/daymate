@@ -92,7 +92,8 @@ function taskLi(t) {
 }
 function render() {
   const today = todayStr(), h = new Date().getHours();
-  $('#hello').textContent = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  const first = user ? displayName(user).split(' ')[0] : '';
+  $('#hello').textContent = (h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening') + (first ? ', ' + first : '');
   $('#todayTitle').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
   const timed = items.filter(x => x.date === today && x.time).sort((a, b) => a.time.localeCompare(b.time));
   $('#agenda').innerHTML = timed.length ? timed.map(x => {
@@ -303,40 +304,105 @@ let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; $('#install').hidden = false; });
 $('#install').onclick = async () => { if (!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; $('#install').hidden = true; };
 
-/* ---------- auth ---------- */
-let pendingEmail = '';
-$('#emailForm').addEventListener('submit', async e => {
-  e.preventDefault(); $('#authErr').textContent = '';
-  pendingEmail = $('#email').value.trim().toLowerCase();
-  $('#sendCode').disabled = true; $('#sendCode').textContent = 'Sending…';
-  const { error } = await sb.auth.signInWithOtp({ email: pendingEmail, options: { shouldCreateUser: true, emailRedirectTo: location.origin + location.pathname } });
-  $('#sendCode').disabled = false; $('#sendCode').textContent = 'Email me a sign-in link';
-  if (error) { $('#authErr').textContent = /rate|limit/i.test(error.message) ? 'Too many emails right now. Please wait a few minutes and try again.' : error.message; return; }
-  $('#sentTo').textContent = pendingEmail; $('#emailForm').hidden = true; $('#codeForm').hidden = false; $('#code').focus();
+/* ---------- accounts ---------- */
+const authForms = ['inForm', 'upForm', 'forgotForm', 'newPassForm'];
+function authView(id) {
+  for (const f of authForms) $('#' + f).hidden = f !== id;
+  $('#authTabs').hidden = id === 'forgotForm' || id === 'newPassForm';
+  document.querySelectorAll('#authTabs button').forEach(b => b.setAttribute('aria-selected', (b.dataset.a === 'in') === (id === 'inForm')));
+  authMsg('', '');
+}
+function authMsg(err, ok) { $('#authErr').textContent = err; $('#authOk').textContent = ok; }
+function busy(btn, on, label) { btn.disabled = on; if (label) btn.textContent = label; }
+function friendly(e) {
+  const m = String(e?.message || e || '');
+  if (/invalid login/i.test(m)) return 'Wrong email or password.';
+  if (/already registered|already exists/i.test(m)) return 'An account with this email already exists. Sign in instead.';
+  if (/rate|limit|too many/i.test(m)) return 'Too many tries. Please wait a few minutes.';
+  if (/password.*(short|least|weak)/i.test(m)) return 'Choose a longer password (at least 8 characters).';
+  if (/not confirmed/i.test(m)) return 'Please confirm your email first, using the link we sent you.';
+  return m || 'Something went wrong. Please try again.';
+}
+document.querySelectorAll('#authTabs button').forEach(b => b.onclick = () => authView(b.dataset.a === 'in' ? 'inForm' : 'upForm'));
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-eye]'); if (!b) return;
+  const i = document.getElementById(b.dataset.eye); const show = i.type === 'password';
+  i.type = show ? 'text' : 'password'; b.textContent = show ? 'Hide' : 'Show';
 });
-$('#codeForm').addEventListener('submit', async e => {
-  e.preventDefault(); $('#authErr').textContent = '';
-  const token = $('#code').value.replace(/\s/g, '');
-  $('#verify').disabled = true;
-  const { error } = await sb.auth.verifyOtp({ email: pendingEmail, token, type: 'email' });
-  $('#verify').disabled = false;
-  if (error) $('#authErr').textContent = 'That code did not work. Check it, or ask for a new one.';
+$('#toForgot').onclick = () => { $('#fgEmail').value = $('#inEmail').value; authView('forgotForm'); };
+$('#fgBack').onclick = () => authView('inForm');
+
+$('#inForm').addEventListener('submit', async e => {
+  e.preventDefault(); authMsg('', ''); const btn = $('#inBtn'); busy(btn, true, 'Signing in…');
+  const { error } = await sb.auth.signInWithPassword({ email: $('#inEmail').value.trim(), password: $('#inPass').value });
+  busy(btn, false, 'Sign in');
+  if (error) authMsg(friendly(error), '');
 });
-$('#back').onclick = () => { $('#codeForm').hidden = true; $('#emailForm').hidden = false; $('#code').value = ''; };
+$('#upForm').addEventListener('submit', async e => {
+  e.preventDefault(); authMsg('', ''); const btn = $('#upBtn'); busy(btn, true, 'Creating…');
+  const name = $('#upName').value.trim();
+  const { data, error } = await sb.auth.signUp({
+    email: $('#upEmail').value.trim(), password: $('#upPass').value,
+    options: { data: { full_name: name }, emailRedirectTo: location.origin + location.pathname },
+  });
+  busy(btn, false, 'Create my account');
+  if (error) { authMsg(friendly(error), ''); return; }
+  if (data.user && data.user.identities && data.user.identities.length === 0) { authMsg('An account with this email already exists. Sign in instead.', ''); return; }
+  if (!data.session) { authView('inForm'); $('#inEmail').value = $('#upEmail').value; authMsg('', 'Account created! Check your email and tap the confirm link, then sign in here.'); }
+});
+$('#forgotForm').addEventListener('submit', async e => {
+  e.preventDefault(); authMsg('', ''); const btn = $('#fgBtn'); busy(btn, true, 'Sending…');
+  const { error } = await sb.auth.resetPasswordForEmail($('#fgEmail').value.trim(), { redirectTo: location.origin + location.pathname });
+  busy(btn, false, 'Send reset link');
+  if (error) authMsg(friendly(error), ''); else authMsg('', 'Check your email for a link to reset your password (look in spam too).');
+});
+let recovering = false;
+$('#newPassForm').addEventListener('submit', async e => {
+  e.preventDefault(); authMsg('', ''); const btn = $('#npBtn'); busy(btn, true, 'Saving…');
+  const { data, error } = await sb.auth.updateUser({ password: $('#npPass').value });
+  busy(btn, false, 'Save new password');
+  if (error) { authMsg(friendly(error), ''); return; }
+  recovering = false; toast('Password changed.'); enter({ user: data.user }, true);
+});
+
+/* ---------- profile ---------- */
+const displayName = u => (u?.user_metadata?.full_name || '').trim() || (u?.email || '').split('@')[0];
+const initials = n => n.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
+function showProfile() {
+  const n = displayName(user);
+  $('#meName').textContent = n; $('#avatar').textContent = initials(n); $('#avatarBig').textContent = initials(n);
+  $('#profName').textContent = n; $('#me').textContent = user.email || ''; $('#nameIn').value = n;
+  $('#since').textContent = user.created_at ? 'Member since ' + new Date(user.created_at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : '';
+  render();
+}
+$('#meBtn').onclick = () => show('set');
+$('#nameForm').addEventListener('submit', async e => {
+  e.preventDefault(); const name = $('#nameIn').value.trim(); if (!name) return;
+  const { data, error } = await sb.auth.updateUser({ data: { full_name: name } });
+  if (error) { toast(friendly(error)); return; }
+  user = data.user; showProfile(); toast('Name saved.');
+});
+$('#passForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const { error } = await sb.auth.updateUser({ password: $('#passIn').value });
+  if (error) { toast(friendly(error)); return; }
+  $('#passIn').value = ''; toast('Password changed.');
+});
 $('#signOut').onclick = async () => { await sb.auth.signOut(); };
 
-function enter(session) {
+function enter(session, force) {
   const u = session?.user || null;
-  if (u && user?.id === u.id) return;
+  if (recovering) { $('#auth').hidden = false; $('#app').hidden = true; authView('newPassForm'); return; }
+  if (u && user?.id === u.id && !force) { user = u; showProfile(); return; }
   user = u;
   $('#auth').hidden = !!user; $('#app').hidden = !user;
   if (!user) { items = []; if (channel) sb.removeChannel(channel); channel = null; return; }
-  $('#me').textContent = user.email || '';
+  showProfile();
   $('#ver').textContent = 'DayMate ' + (CFG.version || '');
   setStatus('Loading…'); render(); load(); subscribe();
   if (new URLSearchParams(location.search).get('add')) $('#qin').focus();
 }
-sb.auth.onAuthStateChange((_e, session) => enter(session));
+sb.auth.onAuthStateChange((ev, session) => { if (ev === 'PASSWORD_RECOVERY') recovering = true; enter(session); });
 sb.auth.getSession().then(({ data }) => enter(data.session));
 setInterval(() => { if (user && view === 'today') render(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && user) load(); });

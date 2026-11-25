@@ -18,32 +18,56 @@
 </head>
 <body>
 
-<!-- Sign in -->
+<!-- Sign in / create account -->
 <section id="auth" class="auth" hidden>
   <div class="brand"><img src="icons/icon-192.png" alt=""><h1>DayMate</h1></div>
   <p class="sub">Your AI planner for tasks, schedule and meetings, on every device.</p>
-  <form class="box" id="emailForm">
-    <label for="email"><b>Your email</b></label>
-    <input id="email" type="email" autocomplete="email" required placeholder="you@gmail.com">
-    <button class="pri" id="sendCode">Email me a sign-in link</button>
-    <p class="small">No password needed. We'll email you a link that signs you in.</p>
+  <div class="row seg" role="tablist" id="authTabs">
+    <button type="button" data-a="in" aria-selected="true">Sign in</button>
+    <button type="button" data-a="up" aria-selected="false">Create account</button>
+  </div>
+
+  <form class="box" id="inForm" autocomplete="on">
+    <label>Email<input id="inEmail" type="email" autocomplete="username" required></label>
+    <label>Password<span class="pw"><input id="inPass" type="password" autocomplete="current-password" required minlength="6"><button type="button" class="ghost eye" data-eye="inPass">Show</button></span></label>
+    <button class="pri" id="inBtn">Sign in</button>
+    <button type="button" class="ghost" id="toForgot">Forgot password?</button>
   </form>
-  <form class="box" id="codeForm" hidden>
-    <p><b>Check your email.</b> We sent a sign-in link to <b id="sentTo"></b>. Open it on this device and tap <i>Log In</i>. It may take a minute, and check your spam folder.</p>
-    <label for="code" class="small">If the email shows a 6-digit code instead, type it here:</label>
-    <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required placeholder="123456">
-    <button class="pri" id="verify">Sign in</button>
-    <button type="button" class="ghost" id="back">Use a different email</button>
+
+  <form class="box" id="upForm" hidden autocomplete="on">
+    <label>Your name<input id="upName" autocomplete="name" required maxlength="60" placeholder="e.g. Ali Khan"></label>
+    <label>Email<input id="upEmail" type="email" autocomplete="email" required></label>
+    <label>Password<span class="pw"><input id="upPass" type="password" autocomplete="new-password" required minlength="8" placeholder="At least 8 characters"><button type="button" class="ghost eye" data-eye="upPass">Show</button></span></label>
+    <button class="pri" id="upBtn">Create my account</button>
+    <p class="small">By creating an account you agree to keep your login private. Your planner is visible only to you.</p>
   </form>
-  <p class="err" id="authErr"></p>
+
+  <form class="box" id="forgotForm" hidden>
+    <p><b>Reset your password.</b> Enter your email and we'll send you a link to choose a new one.</p>
+    <label>Email<input id="fgEmail" type="email" autocomplete="email" required></label>
+    <button class="pri" id="fgBtn">Send reset link</button>
+    <button type="button" class="ghost" id="fgBack">Back to sign in</button>
+  </form>
+
+  <form class="box" id="newPassForm" hidden>
+    <p><b>Choose a new password</b></p>
+    <label>New password<span class="pw"><input id="npPass" type="password" autocomplete="new-password" required minlength="8"><button type="button" class="ghost eye" data-eye="npPass">Show</button></span></label>
+    <button class="pri" id="npBtn">Save new password</button>
+  </form>
+
+  <p class="err" id="authErr" role="alert"></p>
+  <p class="small ok" id="authOk" role="status"></p>
 </section>
 
 <!-- App -->
 <div class="wrap" id="app" hidden>
   <header>
-    <h1 id="hello">Your day</h1>
-    <span class="sub" id="status"></span>
+    <div class="who">
+      <h1 id="hello">Your day</h1>
+      <span class="sub" id="status"></span>
+    </div>
     <button id="install" hidden>Install app</button>
+    <button class="me" id="meBtn" aria-label="Your account"><span class="avatar" id="avatar">?</span><span class="mename" id="meName"></span></button>
   </header>
   <form class="quick" id="quick" autocomplete="off">
     <input id="qin" placeholder="Type anything: “Meeting with Ali Friday 3pm” or “Pay bills tomorrow”" aria-label="Quick add">
@@ -125,8 +149,17 @@
       <b>iPhone:</b> Safari share button → <i>Add to Home Screen</i>, then open DayMate from the home screen to turn on reminders.</p>
     </div>
     <div class="box">
-      <h2 style="margin:0">Account</h2>
-      <p class="small">Signed in as <b id="me"></b></p>
+      <h2 style="margin:0">Your profile</h2>
+      <div class="row" style="gap:14px"><span class="avatar big" id="avatarBig">?</span><div><b id="profName"></b><br><span class="small" id="me"></span><br><span class="small" id="since"></span></div></div>
+      <form id="nameForm" class="row"><input id="nameIn" maxlength="60" required aria-label="Your name" style="flex:1;min-width:180px"><button>Save name</button></form>
+    </div>
+    <div class="box">
+      <h2 style="margin:0">Password</h2>
+      <form id="passForm" class="row"><span class="pw" style="flex:1;min-width:200px"><input id="passIn" type="password" autocomplete="new-password" minlength="8" required placeholder="New password (8+ characters)" aria-label="New password"><button type="button" class="ghost eye" data-eye="passIn">Show</button></span><button>Change password</button></form>
+    </div>
+    <div class="box">
+      <h2 style="margin:0">Sign out</h2>
+      <p class="small">Sign out on this device. Your planner stays saved in your account.</p>
       <div class="row"><button id="signOut">Sign out</button></div>
     </div>
     <p class="small" id="ver"></p>
