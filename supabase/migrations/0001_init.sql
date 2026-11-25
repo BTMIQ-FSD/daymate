@@ -74,3 +74,9 @@ create trigger items_touch before update on public.items
 do $$ begin
   alter publication supabase_realtime add table public.items;
 exception when duplicate_object then null; when undefined_object then null; end $$;
+
+-- Table access for the API (security rules above still apply to users)
+grant usage on schema public to anon, authenticated, service_role;
+grant all on all tables in schema public to service_role;
+grant select, insert, update, delete on public.items, public.push_subscriptions to authenticated;
+grant select on public.ai_usage to authenticated;
