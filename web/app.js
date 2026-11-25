@@ -36,7 +36,7 @@ function toRow(it) {
     end_time: hhmm(it.end_time) || null,
     priority: ['high', 'low'].includes(it.priority) ? it.priority : 'normal',
     done: !!it.done,
-    link: safeLink(it.link),
+    link: String(it.link || '').trim().slice(0, 500),
     remind_minutes: it.remind_minutes === '' || it.remind_minutes == null || isNaN(Number(it.remind_minutes)) ? null : Number(it.remind_minutes),
   };
   // Reminder time is worked out here, in the user's own time zone.
@@ -99,7 +99,7 @@ function render() {
   $('#agenda').innerHTML = timed.length ? timed.map(x => {
     const l = safeLink(x.link);
     return `<li><span class="t">${esc(fmtTime(x.time))}${x.end_time ? `<small>to ${esc(fmtTime(x.end_time))}</small>` : ''}</span>
-    <span class="it" data-ed="${esc(x.id)}" style="cursor:pointer"><b style="${x.done ? 'text-decoration:line-through;opacity:.7' : ''}">${esc(x.title)}</b><span>${x.kind === 'event' ? 'Event' : 'Task'}${x.notes ? ' · ' + esc(x.notes.slice(0, 60)) : ''}</span></span>
+    <span class="it" data-ed="${esc(x.id)}" style="cursor:pointer"><b style="${x.done ? 'text-decoration:line-through;opacity:.7' : ''}">${esc(x.title)}</b><span>${x.kind === 'event' ? 'Event' : 'Task'}${x.link && !l ? ' · ' + esc(x.link.slice(0, 60)) : ''}${x.notes ? ' · ' + esc(x.notes.slice(0, 60)) : ''}</span></span>
     ${l ? `<a class="join" href="${esc(l)}" target="_blank" rel="noopener">Join</a>` : '<span></span>'}</li>`;
   }).join('') : '<li class="empty"><span></span><span>Nothing at a set time today. Type above to add something.</span><span></span></li>';
   const due = items.filter(x => x.kind === 'task' && !x.done && x.date && x.date <= today && !(x.date === today && x.time)).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
@@ -138,7 +138,7 @@ function openEdit(it, preset = {}) {
 $('#edit').addEventListener('submit', e => {
   e.preventDefault(); const f = e.target; const o = { ...editing };
   for (const k of FIELDS) o[k] = f.elements[k].value.trim();
-  if (o.link && !safeLink(o.link)) { toast('Meeting links must start with https://'); return; }
+  if (/^www\./i.test(o.link)) o.link = 'https://' + o.link;
   $('#dlg').close(); saveItem(o).catch(() => {});
 });
 $('#cancel').onclick = () => $('#dlg').close();

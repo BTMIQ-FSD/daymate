@@ -178,7 +178,7 @@
     <label>Time<input type="time" name="time"></label>
     <label>Ends<input type="time" name="end_time"></label>
     <label>Remind me<select name="remind_minutes"><option value="">No reminder</option><option value="0">At the time</option><option value="10">10 min before</option><option value="30">30 min before</option><option value="60">1 hour before</option><option value="1440">1 day before</option></select></label>
-    <label class="full">Meeting link<input name="link" placeholder="https://meet.google.com/…"></label>
+    <label class="full">Place or meeting link<input name="link" maxlength="500" placeholder="Office, in person, or https://meet.google.com/…"></label>
     <label class="full">Notes<textarea name="notes" rows="2" maxlength="4000"></textarea></label>
     <div class="full row" style="justify-content:space-between">
       <button type="button" id="del" class="ghost" style="color:#e6261f">Delete</button>
