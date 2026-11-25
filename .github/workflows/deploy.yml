@@ -1,4 +1,4 @@
-name: Deploy DayMate
+name: Publish DayMate website
 
 on:
   push:
@@ -11,128 +11,21 @@ permissions:
   id-token: write
 
 concurrency:
-  group: deploy
+  group: pages
   cancel-in-progress: true
 
-env:
-  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-  REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-
 jobs:
-  backend:
-    runs-on: ubuntu-latest
-    outputs:
-      publishable: ${{ steps.keys.outputs.publishable }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: Database schema
-        run: |
-          python3 - <<'EOF'
-          import json, os, urllib.request
-          sql = open('supabase/migrations/0001_init.sql').read()
-          req = urllib.request.Request(
-            f"https://api.supabase.com/v1/projects/{os.environ['REF']}/database/query",
-            data=json.dumps({"query": sql}).encode(), method="POST",
-            headers={"Authorization": f"Bearer {os.environ['SUPABASE_ACCESS_TOKEN']}", "Content-Type": "application/json"})
-          print(urllib.request.urlopen(req).read()[:300])
-          EOF
-
-      - name: Secrets
-        run: |
-          supabase secrets set --project-ref "$REF" \
-            GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}" \
-            VAPID_PUBLIC_KEY="${{ secrets.VAPID_PUBLIC_KEY }}" \
-            VAPID_PRIVATE_KEY="${{ secrets.VAPID_PRIVATE_KEY }}" \
-            VAPID_SUBJECT="${{ secrets.VAPID_SUBJECT }}" \
-            CRON_SECRET="${{ secrets.CRON_SECRET }}"
-
-      - name: Functions
-        run: |
-          supabase functions deploy ai --project-ref "$REF" --no-verify-jwt --use-api
-          supabase functions deploy reminders --project-ref "$REF" --no-verify-jwt --use-api
-
-      - name: Reminder schedule (every minute)
-        env:
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-        run: |
-          python3 - <<'EOF'
-          import json, os, urllib.request
-          ref, secret = os.environ['REF'], os.environ['CRON_SECRET']
-          sql = f"""
-          select cron.unschedule(jobid) from cron.job where jobname = 'daymate-reminders';
-          select cron.schedule('daymate-reminders', '* * * * *', $job$
-            select net.http_post(
-              url := 'https://{ref}.supabase.co/functions/v1/reminders',
-              headers := jsonb_build_object('Content-Type','application/json','x-cron-secret','{secret}'),
-              body := '{{}}'::jsonb);
-          $job$);
-          """
-          req = urllib.request.Request(f"https://api.supabase.com/v1/projects/{ref}/database/query",
-            data=json.dumps({"query": sql}).encode(), method="POST",
-            headers={"Authorization": f"Bearer {os.environ['SUPABASE_ACCESS_TOKEN']}", "Content-Type": "application/json"})
-          print(urllib.request.urlopen(req).read()[:300])
-          EOF
-
-      - name: Sign-in settings (email code)
-        env:
-          SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
-        run: |
-          python3 - <<'EOF'
-          import json, os, urllib.request
-          code_mail = """<h2>Your DayMate sign-in code</h2>
-          <p style="font-size:32px;font-weight:800;letter-spacing:6px">{{ .Token }}</p>
-          <p>Type this code in DayMate to sign in. It expires in 1 hour. If you didn't ask for it, ignore this email.</p>"""
-          body = {
-            "site_url": os.environ["SITE_URL"],
-            "uri_allow_list": os.environ["SITE_URL"] + "**",
-            "mailer_otp_length": 6,
-            "mailer_subjects_magic_link": "Your DayMate code",
-            "mailer_templates_magic_link_content": code_mail,
-            "mailer_subjects_confirmation": "Your DayMate code",
-            "mailer_templates_confirmation_content": code_mail.replace("{{ .Token }}", "{{ .Token }}"),
-          }
-          req = urllib.request.Request(f"https://api.supabase.com/v1/projects/{os.environ['REF']}/config/auth",
-            data=json.dumps(body).encode(), method="PATCH",
-            headers={"Authorization": f"Bearer {os.environ['SUPABASE_ACCESS_TOKEN']}", "Content-Type": "application/json"})
-          print(urllib.request.urlopen(req).status)
-          EOF
-
-      - name: Public key for the app
-        id: keys
-        run: |
-          python3 - <<'EOF' >> "$GITHUB_OUTPUT"
-          import json, os, urllib.request
-          req = urllib.request.Request(f"https://api.supabase.com/v1/projects/{os.environ['REF']}/api-keys?reveal=true",
-            headers={"Authorization": f"Bearer {os.environ['SUPABASE_ACCESS_TOKEN']}"})
-          keys = json.loads(urllib.request.urlopen(req).read())
-          pub = next((k.get("api_key") for k in keys if k.get("type") == "publishable"), None) \
-             or next(k.get("api_key") for k in keys if k.get("name") == "anon")
-          print(f"publishable={pub}")
-          EOF
-
   web:
-    needs: backend
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: App config
+      - name: Stamp version
         run: |
-          cat > web/config.js <<EOF
-          window.DAYMATE = {
-            supabaseUrl: "https://${REF}.supabase.co",
-            supabaseKey: "${{ needs.backend.outputs.publishable }}",
-            vapidPublicKey: "${{ secrets.VAPID_PUBLIC_KEY }}",
-            version: "${GITHUB_SHA::7}"
-          };
-          EOF
           sed -i "s/__VERSION__/${GITHUB_SHA::7}/" web/sw.js
+          sed -i "s/__VERSION__/${GITHUB_SHA::7}/" web/config.js
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

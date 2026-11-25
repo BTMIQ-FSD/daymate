@@ -6,8 +6,16 @@ const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-flash-latest";
 const LITE_MODEL = Deno.env.get("GEMINI_LITE_MODEL") ?? "gemini-flash-lite-latest";
 const DAILY_LIMIT = Number(Deno.env.get("AI_DAILY_LIMIT") ?? "60");
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
-const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
-const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SERVICE = envKey("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEYS", "SUPABASE_SECRET_KEY");
+
+function envKey(...names: string[]) {
+  for (const n of names) {
+    const v = Deno.env.get(n);
+    if (!v) continue;
+    try { const j = JSON.parse(v); const first = typeof j === "object" ? Object.values(j)[0] : j; if (first) return String(first); } catch { return v; }
+  }
+  return "";
+}
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -55,13 +63,12 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
   if (!GEMINI_KEY) return json({ error: "AI is not set up yet." }, 503);
 
-  const auth = req.headers.get("Authorization") ?? "";
-  const userClient = createClient(SB_URL, ANON, { global: { headers: { Authorization: auth } } });
-  const { data: { user } } = await userClient.auth.getUser();
+  const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+  const admin = createClient(SB_URL, SERVICE);
+  const { data: { user } } = await admin.auth.getUser(jwt);
   if (!user) return json({ error: "Please sign in again." }, 401);
 
   // Per-user daily limit keeps the free AI quota fair for everyone.
-  const admin = createClient(SB_URL, SERVICE);
   const today = new Date().toISOString().slice(0, 10);
   const { data: usage } = await admin.from("ai_usage").select("calls").eq("user_id", user.id).eq("day", today).maybeSingle();
   if ((usage?.calls ?? 0) >= DAILY_LIMIT) return json({ error: "You've reached today's AI limit. It resets tomorrow." }, 429);

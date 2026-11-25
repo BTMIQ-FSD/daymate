@@ -1,25 +1,52 @@
 // DayMate reminders: runs every minute (pg_cron) and sends push notifications
 // to the phone, PC and (through the phone) the watch.
+// GET ?key=1 returns the public push key the app needs to subscribe.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
-webpush.setVapidDetails(
-  Deno.env.get("VAPID_SUBJECT") ?? "mailto:admin@example.com",
-  Deno.env.get("VAPID_PUBLIC_KEY")!,
-  Deno.env.get("VAPID_PRIVATE_KEY")!,
-);
+const SERVICE = envKey("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEYS", "SUPABASE_SECRET_KEY");
+function envKey(...names: string[]) {
+  for (const n of names) {
+    const v = Deno.env.get(n);
+    if (!v) continue;
+    try { const j = JSON.parse(v); const first = typeof j === "object" ? Object.values(j)[0] : j; if (first) return String(first); } catch { return v; }
+  }
+  return "";
+}
+const db = createClient(SB_URL, SERVICE);
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+};
+
+// Push keys are created once, on first use, and kept in the database.
+let keys: { publicKey: string; privateKey: string } | null = null;
+async function vapid() {
+  if (keys) return keys;
+  const { data } = await db.from("app_config").select("value").eq("key", "vapid").maybeSingle();
+  if (data) return (keys = data.value);
+  await db.from("app_config").upsert({ key: "vapid", value: webpush.generateVAPIDKeys() }, { onConflict: "key", ignoreDuplicates: true });
+  const { data: again } = await db.from("app_config").select("value").eq("key", "vapid").single();
+  return (keys = again!.value);
+}
 
 const fmt = (t: string | null) => (t ? t.slice(0, 5) : "");
 
 Deno.serve(async (req) => {
-  if (!CRON_SECRET || req.headers.get("x-cron-secret") !== CRON_SECRET) return new Response("forbidden", { status: 403 });
-  const db = createClient(SB_URL, SERVICE);
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  const k = await vapid();
+  if (new URL(req.url).searchParams.get("key")) {
+    return new Response(JSON.stringify({ publicKey: k.publicKey }), { headers: { ...cors, "Content-Type": "application/json" } });
+  }
+  webpush.setVapidDetails(Deno.env.get("VAPID_SUBJECT") ?? "mailto:daymate@users.noreply.github.com", k.publicKey, k.privateKey);
+
+  // Only reminders that are already due are sent, and each only once,
+  // so calling this early or often does no harm.
   const now = new Date();
   const { data: due, error } = await db.from("items")
-    .select("id,user_id,title,kind,time,remind_minutes,remind_at")
+    .select("id,user_id,title,kind,time,remind_minutes")
     .eq("notified", false).eq("done", false)
     .lte("remind_at", now.toISOString())
     .gte("remind_at", new Date(now.getTime() - 60 * 60 * 1000).toISOString())
@@ -27,6 +54,7 @@ Deno.serve(async (req) => {
   if (error) return new Response(error.message, { status: 500 });
   let sent = 0;
   for (const it of due ?? []) {
+    await db.from("items").update({ notified: true }).eq("id", it.id);
     const { data: subs } = await db.from("push_subscriptions").select("id,endpoint,p256dh,auth").eq("user_id", it.user_id);
     const mins = it.remind_minutes ?? 0;
     const payload = JSON.stringify({
@@ -44,7 +72,6 @@ Deno.serve(async (req) => {
         else console.error("push failed", code);
       }
     }
-    await db.from("items").update({ notified: true }).eq("id", it.id);
   }
   return new Response(JSON.stringify({ due: due?.length ?? 0, sent }), { headers: { "Content-Type": "application/json" } });
 });

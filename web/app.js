@@ -258,6 +258,10 @@ wireMic($('#cmic'), $('#cin'), $('#chatForm'));
 const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 let swReg = null;
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(r => { swReg = r; }).catch(() => {});
+async function pushKey() {
+  const r = await fetch(CFG.supabaseUrl + '/functions/v1/reminders?key=1', { headers: { apikey: CFG.supabaseKey } });
+  return (await r.json()).publicKey;
+}
 function b64ToBytes(b64) { const s = atob((b64 + '='.repeat((4 - b64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(s, c => c.charCodeAt(0)); }
 async function refreshPushUI() {
   const info = $('#pushInfo'), on = $('#pushOn'), test = $('#pushTest');
@@ -281,7 +285,7 @@ $('#pushOn').onclick = async () => {
   const perm = await Notification.requestPermission();
   if (perm !== 'granted') { refreshPushUI(); return; }
   try {
-    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(CFG.vapidPublicKey) });
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(await pushKey()) });
     const j = sub.toJSON();
     const { error } = await sb.from('push_subscriptions').upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, user_agent: navigator.userAgent.slice(0, 200) }, { onConflict: 'endpoint' });
     if (error) throw error;

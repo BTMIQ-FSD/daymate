@@ -4,6 +4,6 @@ An installable app (Windows, Mac, Android, iPhone, web) for tasks, schedule and 
 
 - `web/` — the app (no build step). `config.js` is generated on deploy.
 - `supabase/` — database schema and server functions (`ai`, `reminders`).
-- `.github/workflows/deploy.yml` — every push to `main` updates the database, functions and the website.
+- `.github/workflows/deploy.yml` — every push to `main` publishes the website to GitHub Pages.
 
-Repository secrets needed: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `GEMINI_API_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET`.
+Server setup (Supabase): run `supabase/migrations/0001_init.sql`, deploy the `ai` and `reminders` functions with JWT verification off, set the `GEMINI_API_KEY` secret, and schedule `reminders` every minute with pg_cron.

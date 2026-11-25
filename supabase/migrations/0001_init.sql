@@ -41,6 +41,14 @@ create table if not exists public.ai_usage (
   primary key (user_id, day)
 );
 
+-- Server-only settings (push keys). No policies = only server functions can read it.
+create table if not exists public.app_config (
+  key text primary key,
+  value jsonb not null,
+  created_at timestamptz not null default now()
+);
+alter table public.app_config enable row level security;
+
 alter table public.items enable row level security;
 alter table public.push_subscriptions enable row level security;
 alter table public.ai_usage enable row level security;
