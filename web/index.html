@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DayMate</title>
+<meta name="description" content="DayMate — your AI planner for tasks, schedule and meetings.">
+<meta name="theme-color" content="#00a86b">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="DayMate">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="config.js"></script>
+</head>
+<body>
+
+<!-- Sign in -->
+<section id="auth" class="auth" hidden>
+  <div class="brand"><img src="icons/icon-192.png" alt=""><h1>DayMate</h1></div>
+  <p class="sub">Your AI planner for tasks, schedule and meetings, on every device.</p>
+  <form class="box" id="emailForm">
+    <label for="email"><b>Your email</b></label>
+    <input id="email" type="email" autocomplete="email" required placeholder="you@gmail.com">
+    <button class="pri" id="sendCode">Send me a code</button>
+    <p class="small">No password needed. We'll email you a 6-digit code.</p>
+  </form>
+  <form class="box" id="codeForm" hidden>
+    <label for="code"><b>Enter the code we sent to <span id="sentTo"></span></b></label>
+    <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required placeholder="123456">
+    <button class="pri" id="verify">Sign in</button>
+    <button type="button" class="ghost" id="back">Use a different email</button>
+  </form>
+  <p class="err" id="authErr"></p>
+</section>
+
+<!-- App -->
+<div class="wrap" id="app" hidden>
+  <header>
+    <h1 id="hello">Your day</h1>
+    <span class="sub" id="status"></span>
+    <button id="install" hidden>Install app</button>
+  </header>
+  <form class="quick" id="quick" autocomplete="off">
+    <input id="qin" placeholder="Type anything: “Meeting with Ali Friday 3pm” or “Pay bills tomorrow”" aria-label="Quick add">
+    <button type="button" class="mic" id="qmic" hidden aria-label="Speak"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+    <button class="pri" id="qbtn">Add</button>
+  </form>
+  <nav role="tablist">
+    <button role="tab" data-v="today" aria-selected="true">Today</button>
+    <button role="tab" data-v="tasks" aria-selected="false">Tasks</button>
+    <button role="tab" data-v="cal" aria-selected="false">Calendar</button>
+    <button role="tab" data-v="ai" aria-selected="false">Assistant</button>
+    <button role="tab" data-v="set" aria-selected="false">Settings</button>
+  </nav>
+
+  <section id="v-today" class="grid">
+    <div class="box em">
+      <h2 id="todayTitle">Today</h2>
+      <ul class="agenda" id="agenda"></ul>
+    </div>
+    <div style="display:grid;gap:16px;align-content:start">
+      <div class="box">
+        <div class="row" style="justify-content:space-between"><h2 style="margin:0">Due today</h2><button class="ghost" id="addTask">+ Task</button></div>
+        <ul class="tasks" id="dueToday"></ul>
+      </div>
+      <div class="box pk">
+        <div class="row" style="justify-content:space-between"><h2 style="margin:0">Daily briefing</h2><button id="briefBtn">Plan my day</button></div>
+        <p class="brief" id="brief">Ask the AI for a short plan of your day, with what to do first.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="v-tasks" hidden>
+    <div class="row filters" id="filters" style="margin-bottom:14px">
+      <button data-f="open" aria-pressed="true">Open</button>
+      <button data-f="today" aria-pressed="false">Today</button>
+      <button data-f="upcoming" aria-pressed="false">Upcoming</button>
+      <button data-f="nodate" aria-pressed="false">No date</button>
+      <button data-f="done" aria-pressed="false">Done</button>
+      <input id="search" placeholder="Search" style="max-width:240px;min-height:38px">
+      <button class="pri" id="addTask2">+ New task</button>
+    </div>
+    <div class="box"><ul class="tasks" id="taskList"></ul></div>
+  </section>
+
+  <section id="v-cal" hidden>
+    <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <h2 style="margin:0" id="weekTitle">This week</h2>
+      <div class="row"><button id="prevW" aria-label="Previous week">←</button><button id="thisW">Today</button><button id="nextW" aria-label="Next week">→</button><button class="pri" id="addEvent">+ Event</button></div>
+    </div>
+    <div class="week" id="week"></div>
+  </section>
+
+  <section id="v-ai" hidden>
+    <div class="box">
+      <div class="chat" id="chat"></div>
+      <div class="row sugg" id="sugg" style="margin-top:10px">
+        <button>What's on my plate this week?</button>
+        <button>Find 1 hour for gym tomorrow</button>
+        <button>Move all overdue tasks to tomorrow</button>
+      </div>
+      <form class="chatin" id="chatForm" autocomplete="off">
+        <input id="cin" placeholder="Ask or tell me to change your schedule…" aria-label="Message">
+        <button type="button" class="mic" id="cmic" hidden aria-label="Speak"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+        <button class="pri">Send</button>
+      </form>
+    </div>
+  </section>
+
+  <section id="v-set" class="set" hidden>
+    <div class="box">
+      <h2 style="margin:0">Reminders on this device</h2>
+      <p class="small" id="pushInfo">Get a notification before tasks and meetings. On Android it also shows on your smartwatch.</p>
+      <div class="row"><button class="pri" id="pushOn">Turn on reminders</button><button id="pushTest" hidden>Send a test</button></div>
+    </div>
+    <div class="box">
+      <h2 style="margin:0">Install DayMate</h2>
+      <p class="small"><b>Windows / Mac:</b> in Chrome or Edge, click the install icon at the right end of the address bar.<br>
+      <b>Android:</b> Chrome menu ⋮ → <i>Install app</i>.<br>
+      <b>iPhone:</b> Safari share button → <i>Add to Home Screen</i>, then open DayMate from the home screen to turn on reminders.</p>
+    </div>
+    <div class="box">
+      <h2 style="margin:0">Account</h2>
+      <p class="small">Signed in as <b id="me"></b></p>
+      <div class="row"><button id="signOut">Sign out</button></div>
+    </div>
+    <p class="small" id="ver"></p>
+  </section>
+
+  <p class="note">Your planner is private to your account and syncs across all your devices.</p>
+</div>
+
+<dialog id="dlg">
+  <form id="edit" class="form" method="dialog">
+    <h2 class="full" id="dlgTitle">Edit</h2>
+    <label class="full">Title<input name="title" required maxlength="300"></label>
+    <label>Type<select name="kind"><option value="task">Task</option><option value="event">Event / meeting</option></select></label>
+    <label>Priority<select name="priority"><option value="normal">Normal</option><option value="high">High</option><option value="low">Low</option></select></label>
+    <label>Date<input type="date" name="date"></label>
+    <label>Time<input type="time" name="time"></label>
+    <label>Ends<input type="time" name="end_time"></label>
+    <label>Remind me<select name="remind_minutes"><option value="">No reminder</option><option value="0">At the time</option><option value="10">10 min before</option><option value="30">30 min before</option><option value="60">1 hour before</option><option value="1440">1 day before</option></select></label>
+    <label class="full">Meeting link<input name="link" placeholder="https://meet.google.com/…"></label>
+    <label class="full">Notes<textarea name="notes" rows="2" maxlength="4000"></textarea></label>
+    <div class="full row" style="justify-content:space-between">
+      <button type="button" id="del" class="ghost" style="color:#e6261f">Delete</button>
+      <div class="row"><button type="button" id="cancel">Cancel</button><button class="pri" id="save">Save</button></div>
+    </div>
+  </form>
+</dialog>
+<div id="toast" role="status"><span id="toastMsg"></span><button id="toastBtn" hidden>Undo</button></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
