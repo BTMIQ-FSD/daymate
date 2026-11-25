@@ -309,8 +309,8 @@ $('#emailForm').addEventListener('submit', async e => {
   e.preventDefault(); $('#authErr').textContent = '';
   pendingEmail = $('#email').value.trim().toLowerCase();
   $('#sendCode').disabled = true; $('#sendCode').textContent = 'Sending…';
-  const { error } = await sb.auth.signInWithOtp({ email: pendingEmail, options: { shouldCreateUser: true } });
-  $('#sendCode').disabled = false; $('#sendCode').textContent = 'Send me a code';
+  const { error } = await sb.auth.signInWithOtp({ email: pendingEmail, options: { shouldCreateUser: true, emailRedirectTo: location.origin + location.pathname } });
+  $('#sendCode').disabled = false; $('#sendCode').textContent = 'Email me a sign-in link';
   if (error) { $('#authErr').textContent = /rate|limit/i.test(error.message) ? 'Too many emails right now. Please wait a few minutes and try again.' : error.message; return; }
   $('#sentTo').textContent = pendingEmail; $('#emailForm').hidden = true; $('#codeForm').hidden = false; $('#code').focus();
 });

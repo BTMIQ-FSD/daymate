@@ -25,11 +25,12 @@
   <form class="box" id="emailForm">
     <label for="email"><b>Your email</b></label>
     <input id="email" type="email" autocomplete="email" required placeholder="you@gmail.com">
-    <button class="pri" id="sendCode">Send me a code</button>
-    <p class="small">No password needed. We'll email you a 6-digit code.</p>
+    <button class="pri" id="sendCode">Email me a sign-in link</button>
+    <p class="small">No password needed. We'll email you a link that signs you in.</p>
   </form>
   <form class="box" id="codeForm" hidden>
-    <label for="code"><b>Enter the code we sent to <span id="sentTo"></span></b></label>
+    <p><b>Check your email.</b> We sent a sign-in link to <b id="sentTo"></b>. Open it on this device and tap <i>Log In</i>. It may take a minute, and check your spam folder.</p>
+    <label for="code" class="small">If the email shows a 6-digit code instead, type it here:</label>
     <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required placeholder="123456">
     <button class="pri" id="verify">Sign in</button>
     <button type="button" class="ghost" id="back">Use a different email</button>
